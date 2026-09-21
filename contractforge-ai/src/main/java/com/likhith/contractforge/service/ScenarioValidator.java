@@ -60,7 +60,7 @@ public class ScenarioValidator {
     private static final int MAX_SCENARIOS = 8;
 
     public ScenarioValidationResult validate(EndpointSnapshot endpoint, LlmScenarioBatch batch) {
-        if (batch == null || batch.endpointId() == null || !batch.endpointId().equals(endpoint.endpointId())) {
+        if (batch == null || !endpointIdMatches(batch.endpointId(), endpoint.endpointId())) {
             String got = batch == null ? "null" : String.valueOf(batch.endpointId());
             return wholeBatchRejected("Response endpointId '" + got + "' does not match requested endpoint '"
                     + endpoint.endpointId() + "'");
@@ -309,6 +309,20 @@ public class ScenarioValidator {
         } else {
             out.put(prefix, node);
         }
+    }
+
+    /**
+     * Some models echo the endpointId back without the "METHOD:" prefix we gave
+     * them (e.g. "/api/payments/scheduled" instead of "POST:/api/payments/scheduled")
+     * despite the prompt supplying it verbatim - this tolerates that specific
+     * formatting drift while still catching genuine drift to a different path.
+     */
+    private boolean endpointIdMatches(String returned, String expected) {
+        if (returned == null || returned.isBlank()) {
+            return false;
+        }
+        String normalized = returned.contains(":") ? returned : "POST:" + returned;
+        return normalized.equals(expected);
     }
 
     private ScenarioValidationResult wholeBatchRejected(String reason) {

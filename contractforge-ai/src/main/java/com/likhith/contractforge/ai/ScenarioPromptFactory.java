@@ -35,6 +35,8 @@ public class ScenarioPromptFactory {
         StringBuilder prompt = new StringBuilder();
 
         prompt.append("Endpoint: ").append(endpoint.endpointId()).append('\n');
+        prompt.append("Your response's top-level endpointId field must be exactly this string, character for character: ")
+                .append(endpoint.endpointId()).append('\n');
         prompt.append("Method: ").append(endpoint.method()).append('\n');
         prompt.append("Path: ").append(endpoint.path()).append('\n');
         if (endpoint.summary() != null && !endpoint.summary().isBlank()) {

@@ -20,6 +20,11 @@ RUN apt-get update \
     && useradd --uid 10001 --shell /usr/sbin/nologin --no-create-home appuser
 
 COPY --from=build /app/target/app.jar ./app.jar
+
+# ContractForge writes runtime artifacts (scenario artifacts, execution reports) under
+# target/contractforge/... relative to the working directory - /app must be writable by
+# the non-root user for that, since WORKDIR/COPY above run as root by default.
+RUN chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8081

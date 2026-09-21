@@ -169,15 +169,17 @@ Reports land in `target/contractforge/reports/`.
 | `contractforge.openai.timeout-ms` | `CONTRACTFORGE_OPENAI_TIMEOUT_MS` | `30000` |
 | `contractforge.openai.max-scenarios` | `CONTRACTFORGE_OPENAI_MAX_SCENARIOS` | `8` |
 | `contractforge.artifacts.scenario-directory` | `CONTRACTFORGE_ARTIFACTS_SCENARIO_DIRECTORY` | `target/contractforge/scenarios` |
-| `contractforge.artifacts.report-directory` | *(harness reads `contractforge.artifacts.report-directory` as a JVM system property — see Phase 3 below)* | `target/contractforge/reports` |
-| `contractforge.execution.allowed-base-urls` | *(harness reads `contractforge.execution.allowed-base-urls` as a JVM system property)* | `http://localhost:8080,http://127.0.0.1:8080` |
-| `contractforge.execution.connect-timeout-ms` | *(system property)* | `5000` |
-| `contractforge.execution.read-timeout-ms` | *(system property)* | `15000` |
+| `contractforge.artifacts.report-directory` | `CONTRACTFORGE_ARTIFACTS_REPORT_DIRECTORY` | `target/contractforge/reports` |
+| `contractforge.execution.allowed-base-urls` | `CONTRACTFORGE_EXECUTION_ALLOWED-BASE-URLS` (list) | `http://localhost:8080,http://127.0.0.1:8080` |
+| `contractforge.execution.connect-timeout-ms` | `CONTRACTFORGE_EXECUTION_CONNECT_TIMEOUT_MS` | `5000` |
+| `contractforge.execution.read-timeout-ms` | `CONTRACTFORGE_EXECUTION_READ_TIMEOUT_MS` | `15000` |
 
 No URL, model name, or key is ever hard-coded in parsing/AI logic — everything is read from
-`OpenApiSourceProperties` / `OpenAiProperties` / `ArtifactProperties` / `ExecutionProperties`. The Phase 3 harness
-runs as a plain JUnit test with no Spring context, so it re-reads the same property names as JVM system
-properties (`-Dcontractforge...`) with identical defaults, rather than injecting the Spring classes directly.
+`OpenApiSourceProperties` / `OpenAiProperties` / `ArtifactProperties` / `ExecutionProperties`, all real
+Spring-managed `@ConfigurationProperties` classes injected into the running app (used directly by
+`POST /api/pipeline/run` — see below). The Phase 3 **standalone JUnit harness** (`executor/` under test sources)
+has no Spring context to inject into, so it separately re-reads the same property names as JVM system properties
+(`-Dcontractforge...`) with identical defaults.
 
 ## API
 
@@ -188,6 +190,7 @@ properties (`-Dcontractforge...`) with identical defaults, rather than injecting
 | `GET /api/contracts/snapshots/{encodedEndpointId}` | Returns one `EndpointSnapshot` (Base64url-encoded id, e.g. `POST:/api/payments/scheduled`). `404` if unknown, `409` if nothing parsed yet. |
 | `POST /api/scenarios/generate` | Generates and validates synthetic payload scenarios for one already-parsed endpoint; persists a scenario artifact. See below. |
 | `GET /api/scenarios/artifacts/{artifactId}` | Returns one previously saved `ScenarioArtifact` by id. `404` if unknown. Read-only. |
+| `POST /api/pipeline/run` | **Runs the entire flow in one call**: parse → generate+validate for every discovered endpoint → execute accepted scenarios against a validated Test API target → one consolidated report. See [PIPELINE.md](PIPELINE.md). |
 
 ### `POST /api/scenarios/generate`
 
@@ -434,3 +437,16 @@ mirroring the exact "springdoc defaults to 200 unless told otherwise" gap called
   payload value into the report file.
 - `ScenarioGenerationServiceTest` — extended with "an artifact is persisted after generation" and "the artifact
   excludes rejected scenarios."
+
+## One-shot pipeline — run everything with a single call
+
+`POST /api/pipeline/run` chains parse → generate+validate (all endpoints) → execute (accepted scenarios only)
+into one HTTP call and returns a single consolidated report — no separate parse/generate/execute steps, no
+per-endpoint looping required. See **[PIPELINE.md](PIPELINE.md)** for the full request/response shape, safety
+model, and a real example.
+
+```bash
+curl -X POST http://localhost:8081/api/pipeline/run \
+  -H "Content-Type: application/json" \
+  -d '{"intent": "Cover happy path, negative, boundary and business-risk cases", "maxScenariosPerEndpoint": 3}'
+```
