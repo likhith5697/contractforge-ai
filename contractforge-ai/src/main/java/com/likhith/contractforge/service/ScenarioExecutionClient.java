@@ -1,5 +1,7 @@
 package com.likhith.contractforge.service;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -38,13 +40,14 @@ public class ScenarioExecutionClient {
 
     public ScenarioExecutionOutcome execute(String validatedBaseUrl, EndpointSnapshot endpoint, ApiScenario scenario) {
         String requestId = UUID.randomUUID().toString();
-        String url = joinUrl(validatedBaseUrl, endpoint.path());
         HttpMethod method = HttpMethod.valueOf(endpoint.method() == null ? "POST" : endpoint.method());
 
         long startNanos = System.nanoTime();
         try {
+            URI uri = buildUri(validatedBaseUrl, endpoint.path());
+
             ResponseEntity<Void> response = executionRestClient.method(method)
-                    .uri(url)
+                    .uri(uri)
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-Request-Id", requestId)
                     .body(scenario.payload())
@@ -71,9 +74,17 @@ public class ScenarioExecutionClient {
         }
     }
 
-    private String joinUrl(String baseUrl, String path) {
-        String normalizedBase = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+    /**
+     * Endpoint paths from OpenAPI are templates (e.g. "/api/cards/{cardId}/activate") -
+     * literal curly braces, not values to substitute (we have none to substitute anyway,
+     * since a scenario only ever targets the endpoint it was generated for). Building the
+     * URI via this multi-argument constructor auto-escapes such characters in the path
+     * component; passing the same string to RestClient's String-based uri(...) instead
+     * would make Spring try to expand "{cardId}" as a template variable and throw.
+     */
+    private URI buildUri(String baseUrl, String path) throws URISyntaxException {
+        URI base = URI.create(baseUrl);
         String normalizedPath = path.startsWith("/") ? path : "/" + path;
-        return normalizedBase + normalizedPath;
+        return new URI(base.getScheme(), null, base.getHost(), base.getPort(), normalizedPath, null, null);
     }
 }

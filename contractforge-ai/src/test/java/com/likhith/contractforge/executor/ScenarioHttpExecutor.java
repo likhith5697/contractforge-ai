@@ -1,5 +1,7 @@
 package com.likhith.contractforge.executor;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -73,11 +75,11 @@ public class ScenarioHttpExecutor {
 
     private ScenarioExecutionResult execute(ScenarioArtifact artifact, ApiScenario scenario) {
         String requestId = UUID.randomUUID().toString();
-        String url = joinUrl(baseUrl, artifact.targetPath());
+        URI uri = buildUri(baseUrl, artifact.targetPath());
         String method = artifact.targetMethod() == null ? "POST" : artifact.targetMethod();
 
         long startNanos = System.nanoTime();
-        Response response = sendRequest(url, method, scenario, requestId);
+        Response response = sendRequest(uri, method, scenario, requestId);
         long durationMs = (System.nanoTime() - startNanos) / 1_000_000;
 
         int actualStatus = response.getStatusCode();
@@ -92,7 +94,7 @@ public class ScenarioHttpExecutor {
                 requestId, durationMs);
     }
 
-    private Response sendRequest(String url, String method, ApiScenario scenario, String requestId) {
+    private Response sendRequest(URI uri, String method, ApiScenario scenario, String requestId) {
         RequestSpecification request = RestAssured.given()
                 .config(RestAssuredConfig.config().httpClient(HttpClientConfig.httpClientConfig()
                         .setParam("http.connection.timeout", connectTimeoutMs)
@@ -101,20 +103,34 @@ public class ScenarioHttpExecutor {
                 .header("X-Request-Id", requestId)
                 .body(scenario.payload().toString());
 
+        // Passed as a URI (not a String) so RestAssured never treats literal "{cardId}"-style
+        // path template placeholders as its own path-param syntax needing substitution.
         return switch (method.toUpperCase(Locale.ROOT)) {
-            case "POST" -> request.post(url);
-            case "PUT" -> request.put(url);
-            case "PATCH" -> request.patch(url);
-            case "DELETE" -> request.delete(url);
-            case "GET" -> request.get(url);
+            case "POST" -> request.post(uri);
+            case "PUT" -> request.put(uri);
+            case "PATCH" -> request.patch(uri);
+            case "DELETE" -> request.delete(uri);
+            case "GET" -> request.get(uri);
             default -> throw new IllegalArgumentException("Unsupported HTTP method in scenario artifact: " + method);
         };
     }
 
-    private String joinUrl(String baseUrl, String path) {
-        String normalizedBase = stripTrailingSlash(baseUrl);
-        String normalizedPath = path.startsWith("/") ? path : "/" + path;
-        return normalizedBase + normalizedPath;
+    /**
+     * Endpoint paths from OpenAPI are templates (e.g. "/api/cards/{cardId}/activate") -
+     * literal curly braces, not values to substitute. Building the URI via this
+     * multi-argument constructor auto-escapes such characters in the path component;
+     * a plain concatenated String passed to RestAssured's String-based post(...) etc.
+     * would instead be parsed as RestAssured's own path-param syntax and throw.
+     */
+    private URI buildUri(String baseUrl, String path) {
+        try {
+            URI base = URI.create(baseUrl);
+            String normalizedPath = path.startsWith("/") ? path : "/" + path;
+            return new URI(base.getScheme(), null, base.getHost(), base.getPort(), normalizedPath, null, null);
+        } catch (URISyntaxException ex) {
+            throw new IllegalArgumentException("Could not build a request URI from base '" + baseUrl
+                    + "' and path '" + path + "'", ex);
+        }
     }
 
     private String validateBaseUrl(String candidateBaseUrl, List<String> allowedBaseUrls) {

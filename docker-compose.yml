@@ -32,6 +32,11 @@ services:
       # Reach banking-api by its Compose service name on the shared network -
       # no host.docker.internal needed since both containers run together here.
       CONTRACTFORGE_OPENAPI_SOURCE_URL: http://banking-api:8080/v3/api-docs
+      # POST /api/pipeline/run executes against a target it validates against this
+      # allowlist. Inside this container "localhost:8080" would mean itself, not
+      # banking-api - so the Compose service name must be explicitly allow-listed
+      # for the pipeline endpoint to be usable at all when run this way.
+      CONTRACTFORGE_EXECUTION_ALLOWED_BASE_URLS: http://banking-api:8080,http://localhost:8080,http://127.0.0.1:8080
     depends_on:
       banking-api:
         condition: service_healthy
