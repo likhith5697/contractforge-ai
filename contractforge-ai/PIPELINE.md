@@ -6,6 +6,59 @@ introduce any new capability of its own — it just chains the existing, indepen
 don't have to parse, then loop `generate` over 20 endpoint ids by hand, then loop the Phase 3 harness over 20
 artifact files by hand.
 
+## In plain English: what happens to one scenario, start to finish
+
+Skip the JSON for a second — here's what actually happens to a single test case, no code, using a real object
+this system produced.
+
+**The LLM hands back an object like this** (one of several — it returns a list, one per test case):
+
+```json
+{
+  "name": "HappyPath_SchedulePayment",
+  "category": "HAPPY_PATH",
+  "purpose": "Successful scheduling of a future bill payment",
+  "violatedRulePath": null,
+  "payload": {
+    "accountId": "12345abcde",
+    "amount": { "amount": 50.0, "currency": "USD" },
+    "autoPayEnabled": true,
+    "billerCategory": "ELECTRICITY",
+    "billerId": "bill-67890",
+    "consumerNumber": "9876543210",
+    "notifyBeforeDays": 5,
+    "scheduleDetails": { "startDate": "2024-10-01", "frequency": "MONTHLY", "numberOfOccurrences": 12 }
+  },
+  "expectedStatus": 200
+}
+```
+
+That whole block is **one claim ticket**: a name, a category, a note on what it's testing, the fake data itself
+(`payload`), and what HTTP status it thinks should come back. Here's what happens to it next:
+
+1. **It arrives untrusted.** At this point it's just a candidate — nothing has checked it yet.
+2. **Every field inside `payload` gets interrogated.** Is `accountId` a real field on this endpoint? Is
+   `billerCategory` one of the actual allowed values? Are all the required fields present? Right types
+   everywhere?
+3. **The ticket's own metadata gets checked too.** Does `expectedStatus` match a status this endpoint actually
+   documents? Since `category` is `HAPPY_PATH`, is `violatedRulePath` correctly `null`?
+4. **Verdict: kept or thrown out.** Anything that fails a check above is discarded, with a written reason - never
+   silently patched up. Only what survives becomes "accepted."
+5. **Accepted tickets are saved to a file, byte-for-byte as they arrived** - this is the scenario artifact.
+6. **A fixed, ready-made piece of code - the harness - picks the file up and redeems each ticket.** The harness
+   already knows the HTTP method (`POST`) and the exact endpoint URL before it ever looks at a ticket - those
+   never come from the LLM. All it takes from the ticket is the `payload` block, drops it in as the request body,
+   and sends one real HTTP request.
+7. **The bank's real response gets compared to `expectedStatus`.** Match → pass. Mismatch → fail, logged with
+   both numbers so you can see exactly what disagreed.
+
+The harness itself is not generated, not customized per scenario, and not aware of what any specific ticket
+contains beyond its payload. It is the same four-step loop every time, for every scenario, for every endpoint:
+*already knows the URL and method → takes the LLM's payload as the body → sends it → checks the response status.*
+That fixed shape is what makes the AI's involvement safe to automate - the part that's "smart" (drafting
+plausible test data) is fully separated from the part that's "trusted" (deciding where a request goes and what
+counts as pass or fail), and the second part never changes no matter what the LLM writes.
+
 ## What it does, in order
 
 1. **Parse** the configured OpenAPI source (same as `POST /api/contracts/parse`) — always fresh, every call.
