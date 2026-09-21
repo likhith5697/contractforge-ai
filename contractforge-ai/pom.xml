@@ -17,6 +17,7 @@
 	<properties>
 		<java.version>21</java.version>
 		<swagger-parser.version>2.1.22</swagger-parser.version>
+		<rest-assured.version>5.5.0</rest-assured.version>
 	</properties>
 
 	<dependencies>
@@ -51,6 +52,15 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- Phase 3: the fixed JUnit Dynamic Test harness (src/test/java/.../executor)
+		     uses this to make real HTTP calls against the allow-listed test target. -->
+		<dependency>
+			<groupId>io.rest-assured</groupId>
+			<artifactId>rest-assured</artifactId>
+			<version>${rest-assured.version}</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

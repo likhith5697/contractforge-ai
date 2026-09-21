@@ -17,6 +17,15 @@ contractforge:
     model: ${OPENAI_MODEL:gpt-5-mini}
     timeout-ms: 30000
     max-scenarios: 8
+  artifacts:
+    scenario-directory: target/contractforge/scenarios
+    report-directory: target/contractforge/reports
+  execution:
+    allowed-base-urls:
+      - http://localhost:8080
+      - http://127.0.0.1:8080
+    connect-timeout-ms: 5000
+    read-timeout-ms: 15000
 
 management:
   endpoints:

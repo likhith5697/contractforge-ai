@@ -22,6 +22,7 @@ public class RestClientConfig {
 
     private final OpenApiSourceProperties openApiSourceProperties;
     private final OpenAiProperties openAiProperties;
+    private final ExecutionProperties executionProperties;
 
     @Bean
     public RestClient contractForgeRestClient() {
@@ -51,6 +52,27 @@ public class RestClientConfig {
         // bean-creation time in environments where the LLM feature is simply unused.
         return RestClient.builder()
                 .baseUrl(openAiProperties.getBaseUrl())
+                .requestFactory(requestFactory)
+                .build();
+    }
+
+    /**
+     * Used by ScenarioExecutionClient to call the allow-listed Test API target
+     * from the /api/pipeline/run endpoint. No baseUrl is set here - the target
+     * is validated against ExecutionProperties.allowedBaseUrls at call time and
+     * passed as a full URL per request, since only an already-validated URL
+     * may ever be used.
+     */
+    @Bean
+    public RestClient executionRestClient() {
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(executionProperties.getConnectTimeoutMs()))
+                .build();
+
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(Duration.ofMillis(executionProperties.getReadTimeoutMs()));
+
+        return RestClient.builder()
                 .requestFactory(requestFactory)
                 .build();
     }

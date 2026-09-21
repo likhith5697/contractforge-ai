@@ -1,6 +1,8 @@
 package com.likhith.contractforge.service;
 
+import java.nio.file.Path;
 import java.time.Instant;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,6 +16,7 @@ import com.likhith.contractforge.exception.SnapshotsNotAvailableException;
 import com.likhith.contractforge.model.ContractParseResult;
 import com.likhith.contractforge.model.EndpointSnapshot;
 import com.likhith.contractforge.model.LlmScenarioBatch;
+import com.likhith.contractforge.model.ScenarioArtifact;
 import com.likhith.contractforge.model.ScenarioGenerationRequest;
 import com.likhith.contractforge.model.ScenarioGenerationResponse;
 import com.likhith.contractforge.model.ScenarioValidationResult;
@@ -38,6 +41,7 @@ public class ScenarioGenerationService {
     private final OpenAiProperties openAiProperties;
     private final LlmScenarioClient llmScenarioClient;
     private final ScenarioValidator scenarioValidator;
+    private final ScenarioArtifactStore scenarioArtifactStore;
 
     public ScenarioGenerationResponse generate(ScenarioGenerationRequest request) {
         EndpointSnapshot endpoint = resolveEndpoint(request.endpointId());
@@ -59,6 +63,13 @@ public class ScenarioGenerationService {
                 endpoint.endpointId(), openAiProperties.getModel(), durationMs, effectiveMax,
                 validation.accepted().size(), validation.rejected().size());
 
+        // Only ever the accepted, validated scenarios are persisted - rejected scenarios
+        // never leave this method.
+        ScenarioArtifact artifact = new ScenarioArtifact(
+                UUID.randomUUID(), Instant.now(), endpoint.endpointId(), endpoint.method(), endpoint.path(),
+                validation.accepted());
+        Path artifactPath = scenarioArtifactStore.save(artifact);
+
         return new ScenarioGenerationResponse(
                 endpoint.endpointId(),
                 openAiProperties.getModel(),
@@ -66,7 +77,9 @@ public class ScenarioGenerationService {
                 validation.rejected(),
                 validation.accepted().size(),
                 validation.rejected().size(),
-                Instant.now());
+                Instant.now(),
+                artifact.artifactId(),
+                artifactPath.toString());
     }
 
     private EndpointSnapshot resolveEndpoint(String endpointId) {

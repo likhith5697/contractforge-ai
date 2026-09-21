@@ -22,6 +22,12 @@ services:
     container_name: contractforge-ai
     ports:
       - "8081:8081"
+    env_file:
+      # Optional: only needed for Phase 2/3 (OpenAI scenario generation). Copy
+      # contractforge-ai/.env.example to contractforge-ai/.env and set your key there -
+      # that file is git-ignored and never committed. Phase 1 works fine without it.
+      - path: ./contractforge-ai/.env
+        required: false
     environment:
       # Reach banking-api by its Compose service name on the shared network -
       # no host.docker.internal needed since both containers run together here.

@@ -3,6 +3,9 @@ target/
 .m2repo/
 .mvn/wrapper/maven-wrapper.jar
 .env
+
+### ContractForge runtime outputs (generated scenario artifacts + execution reports, not source code) ###
+target/contractforge/
 !**/src/main/**/target/
 !**/src/test/**/target/
 

@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -59,6 +60,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleLlmCommunication(LlmCommunicationException ex) {
         log.warn("LLM communication failure [{}]: {}", ex.getErrorCode(), ex.getMessage());
         return respond(ex.getStatus(), ex.getErrorCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(ScenarioArtifactNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleArtifactNotFound(ScenarioArtifactNotFoundException ex) {
+        log.info("Scenario artifact not found: {}", ex.getMessage());
+        return respond(HttpStatus.NOT_FOUND, "SCENARIO_ARTIFACT_NOT_FOUND", ex.getMessage());
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        log.info("Invalid parameter '{}': {}", ex.getName(), ex.getMessage());
+        return respond(HttpStatus.BAD_REQUEST, "INVALID_REQUEST",
+                "Parameter '" + ex.getName() + "' has an invalid value");
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

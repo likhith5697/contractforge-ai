@@ -16,6 +16,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 
@@ -23,6 +24,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.likhith.contractforge.ai.FakeLlmScenarioClient;
+import com.likhith.contractforge.config.ArtifactProperties;
 import com.likhith.contractforge.config.OpenAiProperties;
 import com.likhith.contractforge.config.OpenApiSourceProperties;
 import com.likhith.contractforge.exception.LlmCommunicationException;
@@ -31,6 +33,7 @@ import com.likhith.contractforge.exception.SnapshotNotFoundException;
 import com.likhith.contractforge.exception.SnapshotsNotAvailableException;
 import com.likhith.contractforge.model.ApiScenario;
 import com.likhith.contractforge.model.LlmScenarioBatch;
+import com.likhith.contractforge.model.ScenarioArtifact;
 import com.likhith.contractforge.model.ScenarioCategory;
 import com.likhith.contractforge.model.ScenarioGenerationRequest;
 import com.likhith.contractforge.model.ScenarioGenerationResponse;
@@ -47,10 +50,14 @@ class ScenarioGenerationServiceTest {
 
     private static final String ENDPOINT_ID = "POST:/api/payments/scheduled";
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    @TempDir
+    private Path scenarioDirectory;
+
+    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
     private FakeLlmScenarioClient llmScenarioClient;
     private OpenAiProperties openAiProperties;
     private ContractSnapshotCache populatedCache;
+    private FileSystemScenarioArtifactStore artifactStore;
 
     @BeforeEach
     void setUp() {
@@ -59,6 +66,10 @@ class ScenarioGenerationServiceTest {
         openAiProperties = new OpenAiProperties();
         openAiProperties.setApiKey("sk-test-key");
         openAiProperties.setModel("gpt-5-mini");
+
+        ArtifactProperties artifactProperties = new ArtifactProperties();
+        artifactProperties.setScenarioDirectory(scenarioDirectory.toString());
+        artifactStore = new FileSystemScenarioArtifactStore(artifactProperties, objectMapper);
 
         populatedCache = new ContractSnapshotCache();
         OpenApiFetcher fetcher = mock(OpenApiFetcher.class);
@@ -71,7 +82,8 @@ class ScenarioGenerationServiceTest {
     }
 
     private ScenarioGenerationService serviceWith(ContractSnapshotCache cache) {
-        return new ScenarioGenerationService(cache, openAiProperties, llmScenarioClient, new ScenarioValidator());
+        return new ScenarioGenerationService(cache, openAiProperties, llmScenarioClient, new ScenarioValidator(),
+                artifactStore);
     }
 
     @Test
@@ -116,6 +128,52 @@ class ScenarioGenerationServiceTest {
         assertThat(response.rejectedCount()).isZero();
         assertThat(response.model()).isEqualTo("gpt-5-mini");
         assertThat(response.endpointId()).isEqualTo(ENDPOINT_ID);
+    }
+
+    @Test
+    void persistsAScenarioArtifactAfterAcceptedGeneration() throws IOException {
+        ApiScenario happyPath = scenario("valid_monthly_electricity_payment", ScenarioCategory.HAPPY_PATH,
+                null, 201, validHappyPathPayload());
+        llmScenarioClient.willReturn(new LlmScenarioBatch(ENDPOINT_ID, List.of(happyPath)));
+
+        ScenarioGenerationResponse response = serviceWith(populatedCache)
+                .generate(new ScenarioGenerationRequest(ENDPOINT_ID, null, null));
+
+        assertThat(response.artifactId()).isNotNull();
+        assertThat(response.artifactPath()).isNotBlank();
+
+        Path artifactFile = Path.of(response.artifactPath());
+        assertThat(Files.exists(artifactFile)).isTrue();
+
+        ScenarioArtifact persisted = objectMapper.readValue(artifactFile.toFile(), ScenarioArtifact.class);
+        assertThat(persisted.artifactId()).isEqualTo(response.artifactId());
+        assertThat(persisted.endpointId()).isEqualTo(ENDPOINT_ID);
+        assertThat(persisted.targetMethod()).isEqualTo("POST");
+        assertThat(persisted.targetPath()).isEqualTo("/api/payments/scheduled");
+        assertThat(persisted.acceptedScenarios()).hasSize(1);
+        assertThat(persisted.acceptedScenarios().get(0).name()).isEqualTo("valid_monthly_electricity_payment");
+    }
+
+    @Test
+    void artifactExcludesRejectedScenarios() throws IOException {
+        ApiScenario happyPath = scenario("valid_monthly_electricity_payment", ScenarioCategory.HAPPY_PATH,
+                null, 201, validHappyPathPayload());
+        ApiScenario invalidEnum = scenario("invalid_biller_category", ScenarioCategory.HAPPY_PATH, null, 201,
+                withInvalidEnum());
+
+        llmScenarioClient.willReturn(new LlmScenarioBatch(ENDPOINT_ID, List.of(happyPath, invalidEnum)));
+
+        ScenarioGenerationResponse response = serviceWith(populatedCache)
+                .generate(new ScenarioGenerationRequest(ENDPOINT_ID, null, null));
+
+        assertThat(response.acceptedCount()).isEqualTo(1);
+        assertThat(response.rejectedCount()).isEqualTo(1);
+
+        ScenarioArtifact persisted = objectMapper.readValue(Path.of(response.artifactPath()).toFile(),
+                ScenarioArtifact.class);
+        assertThat(persisted.acceptedScenarios()).hasSize(1);
+        assertThat(persisted.acceptedScenarios())
+                .noneMatch(s -> s.name().equals("invalid_biller_category"));
     }
 
     @Test
@@ -212,6 +270,12 @@ class ScenarioGenerationServiceTest {
     private JsonNode payloadWithNotifyBeforeDays(int notifyBeforeDays) {
         var payload = (ObjectNode) validHappyPathPayload();
         payload.put("notifyBeforeDays", notifyBeforeDays);
+        return payload;
+    }
+
+    private JsonNode withInvalidEnum() {
+        var payload = (ObjectNode) validHappyPathPayload();
+        payload.put("billerCategory", "NOT_A_REAL_CATEGORY");
         return payload;
     }
 
