@@ -1,0 +1,76 @@
+package com.likhith.bankingapi.entity;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+
+import com.likhith.bankingapi.entity.enums.PaymentEnums.BillerCategory;
+import com.likhith.bankingapi.entity.enums.PaymentEnums.PaymentFrequency;
+import com.likhith.bankingapi.entity.enums.PaymentEnums.PaymentStatus;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Entity
+@Table(name = "scheduled_payments")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class ScheduledPayment {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "scheduled_payment_id", nullable = false, unique = true)
+    private String scheduledPaymentId;
+
+    @Column(name = "account_id", nullable = false)
+    private String accountId;
+
+    @Column(name = "biller_id", nullable = false)
+    private String billerId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "biller_category", nullable = false)
+    private BillerCategory billerCategory;
+
+    @Column(name = "consumer_number", nullable = false)
+    private String consumerNumber;
+
+    @Column(name = "amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal amount;
+
+    @Column(name = "currency", nullable = false, length = 3)
+    private String currency;
+
+    @Column(name = "start_date", nullable = false)
+    private LocalDate startDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "frequency", nullable = false)
+    private PaymentFrequency frequency;
+
+    @Column(name = "auto_pay_enabled", nullable = false)
+    private boolean autoPayEnabled;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private PaymentStatus status;
+
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
+}

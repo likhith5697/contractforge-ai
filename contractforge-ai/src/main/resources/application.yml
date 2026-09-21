@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: contractforge-ai
+
+# ContractForge runs on 8081 so it can call banking-api (8080) without a port clash.
+server:
+  port: 8081
+
+contractforge:
+  openapi:
+    source-url: http://localhost:8080/v3/api-docs
+    connect-timeout-ms: 5000
+    read-timeout-ms: 10000
+  openai:
+    base-url: https://api.openai.com/v1
+    api-key: ${OPENAI_API_KEY:}
+    model: ${OPENAI_MODEL:gpt-5-mini}
+    timeout-ms: 30000
+    max-scenarios: 8
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.likhith.contractforge: DEBUG

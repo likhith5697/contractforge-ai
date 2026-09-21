@@ -1,0 +1,37 @@
+services:
+  banking-api:
+    build:
+      context: ./banking-api
+      dockerfile: Dockerfile
+    image: banking-api:local
+    container_name: banking-api
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  contractforge-ai:
+    build:
+      context: ./contractforge-ai
+      dockerfile: Dockerfile
+    image: contractforge-ai:local
+    container_name: contractforge-ai
+    ports:
+      - "8081:8081"
+    environment:
+      # Reach banking-api by its Compose service name on the shared network -
+      # no host.docker.internal needed since both containers run together here.
+      CONTRACTFORGE_OPENAPI_SOURCE_URL: http://banking-api:8080/v3/api-docs
+    depends_on:
+      banking-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

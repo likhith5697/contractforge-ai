@@ -1,0 +1,92 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Banking API Fixture",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/payments/scheduled": {
+      "post": {
+        "operationId": "schedulePayment",
+        "summary": "Schedule a future or recurring bill payment",
+        "tags": ["Payments"],
+        "parameters": [
+          {
+            "name": "X-Client-Id",
+            "in": "header",
+            "required": true,
+            "description": "Identifies the calling client application",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Client-generated key to safely retry this request",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ScheduledPaymentRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Payment scheduled successfully" },
+          "400": { "description": "Validation or business rule failure" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ScheduledPaymentRequest": {
+        "type": "object",
+        "required": ["accountId", "billerId", "billerCategory", "consumerNumber", "amount", "scheduleDetails", "autoPayEnabled"],
+        "properties": {
+          "accountId": { "type": "string", "example": "ACC-3D2E1F0A9B8C" },
+          "billerId": { "type": "string", "example": "BLR-4471" },
+          "billerCategory": {
+            "type": "string",
+            "enum": ["ELECTRICITY", "WATER", "INTERNET", "MOBILE_POSTPAID", "INSURANCE", "CREDIT_CARD"]
+          },
+          "consumerNumber": { "type": "string", "example": "CONS-99001122" },
+          "amount": { "$ref": "#/components/schemas/MoneyAmountDto" },
+          "scheduleDetails": { "$ref": "#/components/schemas/ScheduleDetails" },
+          "autoPayEnabled": { "type": "boolean" },
+          "notifyBeforeDays": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "maximum": 30,
+            "example": 3
+          }
+        }
+      },
+      "MoneyAmountDto": {
+        "type": "object",
+        "required": ["value", "currency"],
+        "properties": {
+          "value": { "type": "number", "minimum": 0.01, "example": 2500.00 },
+          "currency": { "type": "string", "pattern": "^[A-Z]{3}$", "example": "USD" }
+        }
+      },
+      "ScheduleDetails": {
+        "type": "object",
+        "required": ["startDate", "frequency"],
+        "properties": {
+          "startDate": { "type": "string", "format": "date", "example": "2026-05-01" },
+          "frequency": {
+            "type": "string",
+            "enum": ["ONE_TIME", "WEEKLY", "MONTHLY", "QUARTERLY"]
+          },
+          "numberOfOccurrences": { "type": "integer", "minimum": 1, "example": 12 },
+          "endDate": { "type": "string", "format": "date", "example": "2027-05-01" }
+        }
+      }
+    }
+  }
+}

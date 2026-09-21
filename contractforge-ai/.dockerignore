@@ -1,0 +1,8 @@
+target/
+.m2repo/
+.mvn/wrapper/maven-wrapper.jar
+*.iml
+.idea/
+.vscode/
+*.log
+.env
